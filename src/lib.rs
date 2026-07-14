@@ -36,11 +36,17 @@
 //! };
 //!
 //! // Adxl Device
-//! let mut adxl = adxl::Adxl375::new(adxlbus);
+//! let mut adxl = match adxl::Adxl375::new(adxlbus) {
+//!     Ok(device) => device,
+//!     Err(e) => {
+//!         println!("Device init error: {:?}", e);
+//!         return;
+//!     }
+//! };
 //!
 //! // Adxl Init
 //! if let Err(e) = adxl.init_defaults() {
-//!     println!("Init Err: {}", e);
+//!     println!("Init Err: {:?}", e);
 //!     return;
 //! }
 //!
@@ -51,20 +57,20 @@
 //!         println!("Calibration values | X: {x} | Y: {y} | Z: {z} |\n");
 //!     }
 //!     Err(e) => {
-//!         println!("Err: {}", e);
+//!         println!("Err: {:?}", e);
 //!     }
 //! }
 //!
 //! // Read Axis in m/s^2
 //! match adxl.read_axis() {
 //!     Ok((x, y, z)) => println!("Axis | X: {x:6.3} | Y: {y:6.3} | Z: {z:6.3} |"),
-//!     Err(e) => println!("Err: {}", e),
+//!     Err(e) => println!("Err: {:?}", e),
 //! }
 //!
 //! // Read Axis in raw LSB units
 //! match adxl.read_axis_lsb_units() {
 //!     Ok((x, y, z)) => println!("Axis | X: {x:6} | Y: {y:6} | Z: {z:6} |"),
-//!     Err(e) => println!("Err: {}", e),
+//!     Err(e) => println!("Err: {:?}", e),
 //! }
 //! ```
 
@@ -106,7 +112,13 @@
 //! };
 //!
 //! // Adxl Device
-//! let mut adxl = adxl::Adxl375::new(adxlbus);
+//! let mut adxl = match adxl::Adxl375::new(adxlbus) {
+//!     Ok(device) => device,
+//!     Err(e) => {
+//!         println!("Device init error: {:?}", e);
+//!         return;
+//!     }
+//! };
 //!
 //! ...
 //! ```

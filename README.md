@@ -41,11 +41,17 @@ let adxlbus = adxl::AdxlBusI2c {
 };
 
 // Adxl Device
-let mut adxl = adxl::Adxl375::new(adxlbus);
+let mut adxl = match adxl::Adxl375::new(adxlbus) {
+    Ok(device) => device,
+    Err(e) => {
+        println!("Device init error: {:?}", e);
+        return;
+    }
+};
 
 // Adxl Init
 if let Err(e) = adxl.init_defaults() {
-   println!("Init Err: {}", e);
+   println!("Init Err: {:?}", e);
    return;
 }
 
@@ -56,20 +62,20 @@ match adxl.calibrate_axis_offsets() {
        println!("Calibration values | X: {x} | Y: {y} | Z: {z} |\n");
    }
    Err(e) => {
-       println!("Err: {}", e);
+       println!("Err: {:?}", e);
    }
 }
 
 // Read Axis in m/s^2
 match adxl.read_axis() {
    Ok((x, y, z)) => println!("Axis | X: {x:6.3} | Y: {y:6.3} | Z: {z:6.3} |"),
-   Err(e) => println!("Err: {}", e),
+   Err(e) => println!("Err: {:?}", e),
 }
 
 // Read Axis in raw LSB units
 match adxl.read_axis_lsb_units() {
      Ok((x, y, z)) => println!("Axis | X: {x:6} | Y: {y:6} | Z: {z:6} |"),
-     Err(e) => println!("Err: {}", e),
+     Err(e) => println!("Err: {:?}", e),
  }
  ```
 
@@ -78,46 +84,50 @@ match adxl.read_axis_lsb_units() {
 
 
 
- ``` rust
- 
- use adxl3xx as adxl;
- ...
+```rust
 
- // RP2040 Hal Boilerplate
- ...
+use adxl3xx as adxl;
+...
 
- // ADXL Four wire SPI wiring:
- // SCL >> CLK
- // SDA >> MOSI
- // SDO >> MISO
- // CS  >> GPIO 
- // Note: For power-up in SPI Mode, the ADXL CS Pin
- // has to be pulled to GND with a resistor.
+// RP2040 Hal Boilerplate
+...
 
- // SPI Pins
- let spi_mosi = pins.gpio19.into_function::<hal::gpio::FunctionSpi>();
- let spi_miso = pins.gpio16.into_function::<hal::gpio::FunctionSpi>();
- let spi_sclk = pins.gpio18.into_function::<hal::gpio::FunctionSpi>();
- let spi_cs   = pins.gpio17.into_push_pull_output_in_state(gpio::PinState::High);
+// ADXL Four wire SPI wiring:
+// SCL >> CLK
+// SDA >> MOSI
+// SDO >> MISO
+// CS  >> GPIO | Note: For power-up in SPI Mode, the ADXL CS Pin needs to be pulled to GND with a resistor.
 
- // HAL SPI Bus Init
- let spi = hal::spi::Spi::<_, _, _, 8>::new(pac.SPI0, (spi_mosi, spi_miso, spi_sclk));
- let spi = spi.init(
-     &mut pac.RESETS,
-     clocks.peripheral_clock.freq(),
-     2.MHz(),
-     embedded_hal::spi::MODE_3,
- );
+// SPI Pins
+let spi_mosi = pins.gpio19.into_function::<hal::gpio::FunctionSpi>();
+let spi_miso = pins.gpio16.into_function::<hal::gpio::FunctionSpi>();
+let spi_sclk = pins.gpio18.into_function::<hal::gpio::FunctionSpi>();
+let spi_cs   = pins.gpio17.into_push_pull_output_in_state(gpio::PinState::High);
 
- // SPI Adxl Bus
- let adxlbus = adxl::AdxlBusSpi {
-     spi:    spi,
-     spi_cs: spi_cs,
- };
+// HAL SPI Bus Init
+let spi = hal::spi::Spi::<_, _, _, 8>::new(pac.SPI0, (spi_mosi, spi_miso, spi_sclk));
+let spi = spi.init(
+    &mut pac.RESETS,
+    clocks.peripheral_clock.freq(),
+    2.MHz(),
+    embedded_hal::spi::MODE_3,
+);
 
- // Adxl Device
- let mut adxl = adxl::Adxl375::new(adxlbus);
+// SPI Adxl Bus
+let adxlbus = adxl::AdxlBusSpi {
+    spi:    spi,
+    spi_cs: spi_cs,
+};
 
- ...
+// Adxl Device
+let mut adxl = match adxl::Adxl375::new(adxlbus) {
+    Ok(device) => device,
+    Err(e) => {
+        println!("Device init error: {:?}", e);
+        return;
+    }
+};
 
- ```
+...
+
+```
