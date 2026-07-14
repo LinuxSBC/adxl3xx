@@ -1,4 +1,7 @@
-# Adxl 345 Accelerometer Driver  
+# ADXL375 Accelerometer Driver
+
+This is forked from [lhndo's ADXL345 library](https://github.com/lhndo/lh-adxl345) and focuses on porting the library to the ADXL375 high-G accelerometer, as well as other ADXL accelerometers that have the same interface. At the moment, this includes the ADXL375, ADXL343, ADXL345, ADXL346, ADXL312, ADXL313, and ADXL314.
+
 Based on **embedded-hal**  
 Supports I2C / SPI communications though a generic RegisterBus Trait.  
 
@@ -13,7 +16,7 @@ Reference: <https://www.analog.com/media/en/technical-documentation/data-sheets/
 ## Example I2C:
 ```rust
 
-use lh_adxl345 as adxl;
+use adxl3xx as adxl;
 ...
 // RP2040 Hal Boilerplate
 ...
@@ -38,7 +41,7 @@ let adxlbus = adxl::AdxlBusI2c {
 };
 
 // Adxl Device
-let mut adxl = adxl::Adxl345::new(adxlbus);
+let mut adxl = adxl::Adxl375::new(adxlbus);
 
 // Adxl Init
 if let Err(e) = adxl.init_defaults() {
@@ -77,7 +80,7 @@ match adxl.read_axis_lsb_units() {
 
  ``` rust
  
- use lh_adxl345 as adxl;
+ use adxl3xx as adxl;
  ...
 
  // RP2040 Hal Boilerplate
@@ -113,7 +116,7 @@ match adxl.read_axis_lsb_units() {
  };
 
  // Adxl Device
- let mut adxl = adxl::Adxl345::new(adxlbus);
+ let mut adxl = adxl::Adxl375::new(adxlbus);
 
  ...
 

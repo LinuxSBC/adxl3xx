@@ -1,16 +1,16 @@
 [package]
-name        = "lh-adxl345"
-version     = "0.0.5"
+name        = "adxl3xx"
+version     = "0.1.0"
 edition     = "2024"
-description = "ADXL345 Accelerometer Driver"
+description = "ADXL375/ADXL343/ADXL345/ADXL3xx Accelerometer Driver"
 readme      = "README.md"
-authors     = ["lhndo"]
+authors     = ["Anna Simmons <anna@simmons.ovh>", "lhndo"]
 categories  = ["no-std", "embedded", "hardware-support"]
-keywords    = ["adxl345", "accelerometer"]
+keywords    = ["adxl375", "adxl343", "adxl345", "adxl3", "accelerometer"]
 
 
 license    = "MIT"
-repository = "https://github.com/lhndo/lh-adxl345"
+repository = "https://github.com/LinuxSBC/adxl3xx"
 
 
 [dependencies]

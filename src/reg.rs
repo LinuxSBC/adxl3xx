@@ -14,8 +14,6 @@ use super::reg_helper::*;
 pub const ADXL_ADDR: u8 = 0x53; // ALT Pin Low
 pub const ADXL_ADDR_ALT: u8 = 0x1D; // ALT Pin High
 
-pub const ADXL_DEVICE_ID: u8 = 0xE5; // Expected HW ID 
-
 // —————————————————————————————————————————————————————————————————————————————————————————————————
 //                                           ADXL 345 Registers
 // —————————————————————————————————————————————————————————————————————————————————————————————————

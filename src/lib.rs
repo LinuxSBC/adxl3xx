@@ -1,15 +1,15 @@
-//! Adxl 345 Accelerometer Driver
+//! ADXL375 Accelerometer Driver
 //!
 //! Using embedded-hal
 //! Supports I2C / SPI communications though a RegisterBus Trait
 //!
-//! Reference: <https://www.analog.com/media/en/technical-documentation/data-sheets/adxl345.pdf>
+//! Reference: <https://www.analog.com/media/en/technical-documentation/data-sheets/adxl375.pdf>
 
 //! ## Example I2C:
 //!
 //! ```rust
 //! 
-//! use lh_adxl345 as adxl;
+//! use adxl3xx as adxl;
 //! ...
 //!
 //! // RP2040 Hal Boilerplate
@@ -36,7 +36,7 @@
 //! };
 //!
 //! // Adxl Device
-//! let mut adxl = adxl::Adxl345::new(adxlbus);
+//! let mut adxl = adxl::Adxl375::new(adxlbus);
 //!
 //! // Adxl Init
 //! if let Err(e) = adxl.init_defaults() {
@@ -72,7 +72,7 @@
 //!
 //! ``` rust
 //! 
-//! use lh_adxl345 as adxl;
+//! use adxl3xx as adxl;
 //! ...
 //!
 //! // RP2040 Hal Boilerplate
@@ -106,7 +106,7 @@
 //! };
 //!
 //! // Adxl Device
-//! let mut adxl = adxl::Adxl345::new(adxlbus);
+//! let mut adxl = adxl::Adxl375::new(adxlbus);
 //!
 //! ...
 //! ```
@@ -119,6 +119,7 @@ mod reg_helper;
 
 use core::fmt::{Debug, Display};
 use core::result::Result;
+use core::marker::PhantomData;
 
 pub use reg_helper::{ErrorReg, RegisterBus};
 
@@ -136,39 +137,132 @@ pub const G: f32 = 9.80665; // Gravity m/s^2
 pub const MAX_BUF_LEN: usize = 16;
 
 /// Resolution
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[repr(u8)]
-pub enum Res {
-    Bit10 = 0,
-    Full  = 1,
+pub trait Resolution {
+    const MODE_BIT: u8;
+    const IS_FULL_RES: bool;
+    const STANDARD_RES_BITS: Option<u8>;
+}
+pub struct FullRes;
+impl Resolution for FullRes {
+    const MODE_BIT: u8 = 1;
+    const IS_FULL_RES: bool = true;
+    const STANDARD_RES_BITS: Option<u8> = None;
+}
+
+pub struct TenBitRes;
+impl Resolution for TenBitRes {
+    const MODE_BIT: u8 = 0;
+    const IS_FULL_RES: bool = false;
+    const STANDARD_RES_BITS: Option<u8> = Some(10);
 }
 
 /// Justify
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[repr(u8)]
-pub enum Justify {
-    Right = 0,
-    Left  = 1,
+pub trait Justify {
+    const JUSTIFY_BIT: u8;
+    const IS_LEFT_JUSTIFIED: bool;
+}
+pub struct RightJustify;
+impl Justify for RightJustify {
+    const JUSTIFY_BIT: u8 = 0;
+    const IS_LEFT_JUSTIFIED: bool = false;
+}
+pub struct LeftJustify;
+impl Justify for LeftJustify {
+    const JUSTIFY_BIT: u8 = 1;
+    const IS_LEFT_JUSTIFIED: bool = true;
 }
 
-/// Range Bits
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[repr(u8)]
-pub enum Range {
-    R2G  = 0b_00,
-    R4G  = 0b_01,
-    R8G  = 0b_10,
-    R16G = 0b_11,
+/// Trait to define the compile-time properties of a G-Range
+pub trait GRange {
+    const RANGE_BITS: u8;
+    const FULL_RES_BITS: u8;
+    const G_MAX: f32;
 }
 
-/// Unit Scale Factor
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[repr(u16)]
-pub enum Unit {
-    U2G  = 256,
-    U4G  = 128,
-    U8G  = 64,
-    U16G = 32,
+pub struct G1_5Adxl312;
+pub struct G3Adxl312;
+pub struct G6Adxl312;
+pub struct G12Adxl312;
+
+pub struct G0_5Adxl313;
+pub struct G1Adxl313;
+pub struct G2Adxl313;
+pub struct G4Adxl313;
+
+pub struct G2Adxl345;
+pub struct G4Adxl345;
+pub struct G8Adxl345;
+pub struct G16Adxl345;
+
+pub struct G200Adxl375;
+
+impl GRange for G1_5Adxl312 {
+    const RANGE_BITS: u8 = 0b00;
+    const FULL_RES_BITS: u8 = 10;
+    const G_MAX: f32 = 1.5;
+}
+impl GRange for G3Adxl312 {
+    const RANGE_BITS: u8 = 0b01;
+    const FULL_RES_BITS: u8 = 11;
+    const G_MAX: f32 = 3.0;
+}
+impl GRange for G6Adxl312 {
+    const RANGE_BITS: u8 = 0b10;
+    const FULL_RES_BITS: u8 = 12;
+    const G_MAX: f32 = 6.0;
+}
+impl GRange for G12Adxl312 {
+    const RANGE_BITS: u8 = 0b11;
+    const FULL_RES_BITS: u8 = 13;
+    const G_MAX: f32 = 12.0;
+}
+
+impl GRange for G0_5Adxl313 {
+    const RANGE_BITS: u8 = 0b00;
+    const FULL_RES_BITS: u8 = 10;
+    const G_MAX: f32 = 0.5;
+}
+impl GRange for G1Adxl313 {
+    const RANGE_BITS: u8 = 0b01;
+    const FULL_RES_BITS: u8 = 11;
+    const G_MAX: f32 = 1.0;
+}
+impl GRange for G2Adxl313 {
+    const RANGE_BITS: u8 = 0b10;
+    const FULL_RES_BITS: u8 = 12;
+    const G_MAX: f32 = 2.0;
+}
+impl GRange for G4Adxl313 {
+    const RANGE_BITS: u8 = 0b11;
+    const FULL_RES_BITS: u8 = 13;
+    const G_MAX: f32 = 4.0;
+}
+
+impl GRange for G2Adxl345 {
+    const RANGE_BITS: u8 = 0b00;
+    const FULL_RES_BITS: u8 = 10;
+    const G_MAX: f32 = 2.0;
+}
+impl GRange for G4Adxl345 {
+    const RANGE_BITS: u8 = 0b01;
+    const FULL_RES_BITS: u8 = 11;
+    const G_MAX: f32 = 4.0;
+}
+impl GRange for G8Adxl345 {
+    const RANGE_BITS: u8 = 0b10;
+    const FULL_RES_BITS: u8 = 12;
+    const G_MAX: f32 = 8.0;
+}
+impl GRange for G16Adxl345 {
+    const RANGE_BITS: u8 = 0b11;
+    const FULL_RES_BITS: u8 = 13;
+    const G_MAX: f32 = 16.0;
+}
+
+impl GRange for G200Adxl375 {
+    const RANGE_BITS: u8 = 0b11;
+    const FULL_RES_BITS: u8 = 13;
+    const G_MAX: f32 = 200.0;
 }
 
 /// Wakeup Bits
@@ -242,29 +336,105 @@ pub struct AdxlBusSpi<SPI, CS> {
     pub spi_cs: CS,
 }
 
-pub struct Adxl345<B> {
-    bus:     B,
-    res:     Res,
-    justify: Justify,
-    range:   Range,
-    unit:    Unit,
+pub type Adxl312<B: RegisterBus, R: GRange = G12Adxl312, Res: Resolution = FullRes, Jus: Justify = RightJustify> = Adxl3xx<IC312, B, R, Res, Jus>;
+pub type Adxl313<B: RegisterBus, R: GRange = G4Adxl313, Res: Resolution = FullRes, Jus: Justify = RightJustify> = Adxl3xx<IC313, B, R, Res, Jus>;
+pub type Adxl343<B: RegisterBus, R: GRange = G16Adxl345, Res: Resolution = FullRes, Jus: Justify = RightJustify> = Adxl3xx<IC343, B, R, Res, Jus>;
+pub type Adxl344<B: RegisterBus, R: GRange = G16Adxl345, Res: Resolution = FullRes, Jus: Justify = RightJustify> = Adxl3xx<IC344, B, R, Res, Jus>;
+pub type Adxl345<B: RegisterBus, R: GRange = G16Adxl345, Res: Resolution = FullRes, Jus: Justify = RightJustify> = Adxl3xx<IC345, B, R, Res, Jus>;
+pub type Adxl346<B: RegisterBus, R: GRange = G16Adxl345, Res: Resolution = FullRes, Jus: Justify = RightJustify> = Adxl3xx<IC346, B, R, Res, Jus>;
+pub type Adxl375<B: RegisterBus, Jus: Justify = RightJustify> = Adxl3xx<IC375, B, G200Adxl375, FullRes, Jus>;
+pub type Adxl314<B: RegisterBus, Jus: Justify = RightJustify> = Adxl3xx<IC314, B, G12Adxl312, FullRes, Jus>;
+
+// Marker types for the hardware models
+pub struct IC312;
+pub struct IC313;
+pub struct IC345;
+pub type IC343 = IC345; // ADXL343 is fully intercompatible with ADXL345, so I'm just aliasing it here.
+pub struct IC346;
+pub type IC344 = IC346;
+pub struct IC375;
+pub type IC314 = IC375; // basically just an automotive-rated clone
+
+pub trait AdxlModel {
+    const ID: u8;
+    const G_MAX: f32;
 }
 
-impl<B: RegisterBus> Adxl345<B> {
-    pub fn new(bus: B) -> Self {
-        Self {
-            bus,
-            res: Res::Full,
-            justify: Justify::Right,
-            range: Range::R16G,
-            unit: Unit::U2G,
+impl AdxlModel for IC312 { const ID: u8 = 0xE5; const G_MAX: f32 = 12.0; }
+impl AdxlModel for IC313 { const ID: u8 = 0xCB; const G_MAX: f32 = 4.0; }
+impl AdxlModel for IC345 { const ID: u8 = 0xE5; const G_MAX: f32 = 16.0; }
+impl AdxlModel for IC346 { const ID: u8 = 0xE6; const G_MAX: f32 = 16.0; }
+impl AdxlModel for IC375 { const ID: u8 = 0xE5; const G_MAX: f32 = 200.0; }
+
+/// If a type implements this, that specific combination is legal.
+pub trait AdxlConfig<R: GRange, Res: Resolution>: AdxlModel {}
+
+impl<Res: Resolution> AdxlConfig<G1_5Adxl312, Res> for IC312 {}
+impl<Res: Resolution> AdxlConfig<G3Adxl312, Res> for IC312 {}
+impl<Res: Resolution> AdxlConfig<G6Adxl312, Res> for IC312 {}
+impl<Res: Resolution> AdxlConfig<G12Adxl312, Res> for IC312 {}
+
+impl<Res: Resolution> AdxlConfig<G0_5Adxl313, Res> for IC313 {}
+impl<Res: Resolution> AdxlConfig<G1Adxl313, Res> for IC313 {}
+impl<Res: Resolution> AdxlConfig<G2Adxl313, Res> for IC313 {}
+impl<Res: Resolution> AdxlConfig<G4Adxl313, Res> for IC313 {}
+
+// The ADXL345 allows any resolution with its specific ranges
+impl<Res: Resolution> AdxlConfig<G2Adxl345, Res> for IC345 {}
+impl<Res: Resolution> AdxlConfig<G4Adxl345, Res> for IC345 {}
+impl<Res: Resolution> AdxlConfig<G8Adxl345, Res> for IC345 {}
+impl<Res: Resolution> AdxlConfig<G16Adxl345, Res> for IC345 {}
+
+// The ADXL346 is the same as the ADXL345, but with a different Device ID
+impl<Res: Resolution> AdxlConfig<G2Adxl345, Res> for IC346 {}
+impl<Res: Resolution> AdxlConfig<G4Adxl345, Res> for IC346 {}
+impl<Res: Resolution> AdxlConfig<G8Adxl345, Res> for IC346 {}
+impl<Res: Resolution> AdxlConfig<G16Adxl345, Res> for IC346 {}
+
+// The ADXL375 ONLY allows G200 and FullRes
+impl AdxlConfig<G200Adxl375, FullRes> for IC375 {}
+
+pub struct Adxl3xx<Model: AdxlConfig<R, Res>, B: RegisterBus, R: GRange, Res: Resolution = FullRes, Jus: Justify = RightJustify> {
+    bus: B,
+    bits_per_axis: u8,
+    lsb_per_g: f32,
+    _marker: PhantomData<(Model, R, Res, Jus)>,
+}
+
+impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolution, Jus: Justify> Adxl3xx<Model, Bus, Range, Res, Jus> {
+    pub fn new(mut bus: Bus) -> AdxlResult<Self, Bus> {
+        let bits_per_axis: u8;
+        if Res::IS_FULL_RES {
+            bits_per_axis = Range::FULL_RES_BITS;
+        } else {
+            bits_per_axis = Res::STANDARD_RES_BITS.unwrap_or(10);
         }
+        let lsb_per_g = Range::G_MAX / (1 << (bits_per_axis - 1)) as f32;
+
+        // Validate Device ID
+        let id = reg::DEVID.read(&mut bus)?;
+        if Model::ID != id as u8 {
+            return Err(Error::Init);
+        }
+
+        reg::DATA_FORMAT.write_multiple_fields(&mut bus, &[
+            (reg::FL_DF::FULL_RES, Res::MODE_BIT as u32),
+            (reg::FL_DF::JUSTIFY, Jus::JUSTIFY_BIT as u32),
+            (reg::FL_DF::RANGE, Range::RANGE_BITS as u32),
+        ])?;
+
+        Ok(Self {
+            bus,
+            bits_per_axis,
+            lsb_per_g,
+            _marker: PhantomData,
+        })
     }
 
     // —————————————————————————————————————————— Init —————————————————————————————————————————————
 
     /// Resets the registers to the datasheet values, excluding axes offsets.
-    pub fn reset(&mut self) -> AdxlResult<(), B> {
+    pub fn reset(&mut self) -> AdxlResult<(), Bus> {
         // Reset POWER CTL
         self.write_reg_addr_raw(0x2D, &[0x00])?;
         // Reset THRESH TAP
@@ -289,13 +459,7 @@ impl<B: RegisterBus> Adxl345<B> {
     }
 
     /// Initalize some sane defaults and validates the device id.
-    pub fn init_defaults(&mut self) -> AdxlResult<(), B> {
-        // Validate Device ID
-        let id = reg::DEVID.read(&mut self.bus)?;
-        if reg::ADXL_DEVICE_ID != id as u8 {
-            return Err(Error::Init);
-        }
-
+    pub fn init_defaults(&mut self) -> AdxlResult<(), Bus> {
         self.reset()?;
 
         // Fifo:  Stream | Trigger 0 | Watermark Samples
@@ -304,19 +468,22 @@ impl<B: RegisterBus> Adxl345<B> {
         // Set Rate
         self.set_rate(Rate::R800)?;
 
-        // Data Format
-        self.set_data_format(Res::Full, Justify::Right, Range::R16G)?;
-
         // Start measuring
         self.set_measure(true)?;
 
         Ok(())
     }
 
+    /// Change the base configuration of the accelerometer
+    pub fn into_format<NewRes: Resolution, NewJus: Justify, NewRange: GRange>(self) -> AdxlResult<Adxl3xx<Model, Bus, NewRange, NewRes, NewJus>, Bus>
+        where Model: AdxlConfig<NewRange, NewRes> {
+        Adxl3xx::new(self.bus)
+    }
+
     // ——————————————————————————————————————————— Raw —————————————————————————————————————————————
 
     /// Raw register read
-    pub fn read_reg_addr_raw(&mut self, reg_addr: u8, buf: &mut [u8]) -> AdxlResult<(), B> {
+    pub fn read_reg_addr_raw(&mut self, reg_addr: u8, buf: &mut [u8]) -> AdxlResult<(), Bus> {
         self.bus
             .read_register(reg_addr, buf)
             .map_err(ErrorReg::Bus)?;
@@ -324,7 +491,7 @@ impl<B: RegisterBus> Adxl345<B> {
     }
 
     /// Raw register write    
-    pub fn write_reg_addr_raw(&mut self, reg_addr: u8, buf: &[u8]) -> AdxlResult<(), B> {
+    pub fn write_reg_addr_raw(&mut self, reg_addr: u8, buf: &[u8]) -> AdxlResult<(), Bus> {
         self.bus
             .write_register(reg_addr, buf)
             .map_err(ErrorReg::Bus)?;
@@ -334,23 +501,23 @@ impl<B: RegisterBus> Adxl345<B> {
     // —————————————————————————————————————————— Read —————————————————————————————————————————————
 
     /// Device ID
-    pub fn read_device_id(&mut self) -> AdxlResult<u8, B> {
+    pub fn read_device_id(&mut self) -> AdxlResult<u8, Bus> {
         Ok(reg::DEVID.read(&mut self.bus)? as u8)
     }
 
     /// Fifo Status: Trigger
-    pub fn read_fifo_status_trig(&mut self) -> AdxlResult<u8, B> {
+    pub fn read_fifo_status_trig(&mut self) -> AdxlResult<u8, Bus> {
         Ok(reg::FIFO_STATUS.read_field(&mut self.bus, reg::FL_FS::FIFO_TRIG)? as u8)
     }
 
     /// Fifo Status: Num of samples available in the FIFO buffer
-    pub fn read_fifo_status_entries(&mut self) -> AdxlResult<u8, B> {
+    pub fn read_fifo_status_entries(&mut self) -> AdxlResult<u8, Bus> {
         Ok(reg::FIFO_STATUS.read_field(&mut self.bus, reg::FL_FS::ENTRIES)? as u8)
     }
 
     /// Read XYZ Axis data as raw byte buffer
     #[inline]
-    pub fn read_axis_raw_buf(&mut self) -> AdxlResult<[u8; 6], B> {
+    pub fn read_axis_raw_buf(&mut self) -> AdxlResult<[u8; 6], Bus> {
         let mut buf = [0_u8; 6];
         reg::DATAX0.read_raw_buffer(&mut self.bus, &mut buf)?;
 
@@ -358,7 +525,7 @@ impl<B: RegisterBus> Adxl345<B> {
     }
 
     /// Read XYZ Axis as a tuple of i16 values in LSB units
-    pub fn read_axis_lsb_units(&mut self) -> AdxlResult<(i16, i16, i16), B> {
+    pub fn read_axis_lsb_units(&mut self) -> AdxlResult<(i16, i16, i16), Bus> {
         // Burst read 6 bytes starting from DATAX0
         let buf = self.read_axis_raw_buf()?;
 
@@ -368,16 +535,8 @@ impl<B: RegisterBus> Adxl345<B> {
         let mut z = i16::from_le_bytes([buf[4], buf[5]]);
 
         // Handle left justified data format
-        if self.justify == Justify::Left {
-            let shift: u8 = {
-                match (self.res, self.range) {
-                    (_, Range::R2G) => 6,
-                    (Res::Bit10, _) => 6,
-                    (Res::Full, Range::R4G) => 5,
-                    (Res::Full, Range::R8G) => 4,
-                    (Res::Full, Range::R16G) => 3,
-                }
-            };
+        if Jus::IS_LEFT_JUSTIFIED {
+            let shift: u8 = 16 - self.bits_per_axis;
 
             x >>= shift;
             y >>= shift;
@@ -388,7 +547,7 @@ impl<B: RegisterBus> Adxl345<B> {
     }
 
     /// Read XYZ Axis as a tuple of f32 values as Acceleration units in m/s^2
-    pub fn read_axis(&mut self) -> AdxlResult<(f32, f32, f32), B> {
+    pub fn read_axis(&mut self) -> AdxlResult<(f32, f32, f32), Bus> {
         let data = self.read_axis_lsb_units()?;
 
         // Convert to m/s²
@@ -400,19 +559,19 @@ impl<B: RegisterBus> Adxl345<B> {
     pub fn convert_lsb_to_accel(&self, data: (i16, i16, i16)) -> (f32, f32, f32) {
         // Convert to m/s²
         (
-            data.0 as f32 / (self.unit as u16 as f32) * G,
-            data.1 as f32 / (self.unit as u16 as f32) * G,
-            data.2 as f32 / (self.unit as u16 as f32) * G,
+            data.0 as f32 / self.lsb_per_g * G,
+            data.1 as f32 / self.lsb_per_g * G,
+            data.2 as f32 / self.lsb_per_g * G,
         )
     }
 
     /// Read ACT_TAP_STATUS: Asleep
-    pub fn is_asleep(&mut self) -> AdxlResult<bool, B> {
+    pub fn is_asleep(&mut self) -> AdxlResult<bool, Bus> {
         Ok(reg::ACT_TAP_STATUS.read_field(&mut self.bus, reg::FL_ATS::ASLEEP)? as u8 != 0)
     }
 
     /// Read ACT_TAP_STATUS: ACT (X Y Z)
-    pub fn read_act_source_status(&mut self) -> AdxlResult<(bool, bool, bool), B> {
+    pub fn read_act_source_status(&mut self) -> AdxlResult<(bool, bool, bool), Bus> {
         let mut buf = [0_u32; 3];
 
         reg::ACT_TAP_STATUS.read_multiple_fields(
@@ -431,7 +590,7 @@ impl<B: RegisterBus> Adxl345<B> {
     }
 
     /// Read ACT_TAP_STATUS: TAP (X Y Z)
-    pub fn read_tap_source_status(&mut self) -> AdxlResult<(bool, bool, bool), B> {
+    pub fn read_tap_source_status(&mut self) -> AdxlResult<(bool, bool, bool), Bus> {
         let mut buf = [0_u32; 3];
 
         reg::ACT_TAP_STATUS.read_multiple_fields(
@@ -454,7 +613,7 @@ impl<B: RegisterBus> Adxl345<B> {
     /// (data_ready, single_tap, double_tap, activity, inactivity, free_fall, watermark, overrun)
     /// Interrupts are cleared once reading this register, hence why they are provided all at once!
     /// Output is a IntSource struct holding the values of the respective fields
-    pub fn read_int_source(&mut self) -> AdxlResult<IntSource, B> {
+    pub fn read_int_source(&mut self) -> AdxlResult<IntSource, Bus> {
         let value = reg::INT_SOURCE.read(&mut self.bus)? as u8;
 
         let data_ready = (value & 0b_1000_0000) != 0;
@@ -481,7 +640,7 @@ impl<B: RegisterBus> Adxl345<B> {
     // ——————————————————————————————————————————— Set —————————————————————————————————————————————
 
     /// MEASURE flag has to be set to 1 to start collecting data
-    pub fn set_measure(&mut self, on: bool) -> AdxlResult<(), B> {
+    pub fn set_measure(&mut self, on: bool) -> AdxlResult<(), Bus> {
         reg::POWER_CTL.write_field(&mut self.bus, reg::FL_PC::MEASURE, on as u32)?;
         Ok(())
     }
@@ -495,7 +654,7 @@ impl<B: RegisterBus> Adxl345<B> {
         measure: bool,
         sleep: bool,
         wakeup: Wakeup,
-    ) -> AdxlResult<(), B> {
+    ) -> AdxlResult<(), Bus> {
         let value = (link as u8) << 5
             | (auto_sleep as u8) << 4
             | (measure as u8) << 3
@@ -507,56 +666,25 @@ impl<B: RegisterBus> Adxl345<B> {
     }
 
     /// Set BW_RATE - Low Power mode
-    pub fn set_low_power(&mut self, on: bool) -> AdxlResult<(), B> {
+    pub fn set_low_power(&mut self, on: bool) -> AdxlResult<(), Bus> {
         reg::BW_RATE.write_field(&mut self.bus, reg::FL_BR::LOW_POWER, on as u32)?;
         Ok(())
     }
 
     /// Set BW_RATE - RATE Code
-    pub fn set_rate(&mut self, rate: Rate) -> AdxlResult<(), B> {
+    pub fn set_rate(&mut self, rate: Rate) -> AdxlResult<(), Bus> {
         reg::BW_RATE.write_field(&mut self.bus, reg::FL_BR::RATE, rate as u32)?;
         Ok(())
     }
 
     /// Start or stop DATA_FORMAT - SELF TEST
-    pub fn set_self_test(&mut self, on: bool) -> AdxlResult<(), B> {
+    pub fn set_self_test(&mut self, on: bool) -> AdxlResult<(), Bus> {
         reg::DATA_FORMAT.write_field(&mut self.bus, reg::FL_DF::SELF_TEST, on as u32)?;
         Ok(())
     }
 
-    /// Set DATA FORMAT register
-    pub fn set_data_format(
-        &mut self,
-        res: Res,
-        justify: Justify,
-        range: Range,
-    ) -> AdxlResult<(), B> {
-        //
-        reg::DATA_FORMAT.write_multiple_fields(&mut self.bus, &[
-            (reg::FL_DF::FULL_RES, res as u32),
-            (reg::FL_DF::JUSTIFY, justify as u32),
-            (reg::FL_DF::RANGE, range as u32),
-        ])?;
-
-        self.res = res;
-        self.justify = justify;
-        self.range = range;
-
-        self.unit = {
-            match (res, range) {
-                (Res::Full, _) => Unit::U2G,
-                (Res::Bit10, Range::R2G) => Unit::U2G,
-                (Res::Bit10, Range::R4G) => Unit::U4G,
-                (Res::Bit10, Range::R8G) => Unit::U8G,
-                (Res::Bit10, Range::R16G) => Unit::U16G,
-            }
-        };
-
-        Ok(())
-    }
-
     /// Set SPI wire mode: three wires (true) / four wires(false - default)
-    pub fn set_spi_wire_mode(&mut self, three_wire_mode: bool) -> AdxlResult<(), B> {
+    pub fn set_spi_wire_mode(&mut self, three_wire_mode: bool) -> AdxlResult<(), Bus> {
         reg::DATA_FORMAT.write_field(&mut self.bus, reg::FL_DF::SPI, three_wire_mode as u32)?;
         Ok(())
     }
@@ -567,7 +695,7 @@ impl<B: RegisterBus> Adxl345<B> {
         fifo_mode: FifoMode,
         trigger: bool,
         watermark_samples_num: u8,
-    ) -> AdxlResult<(), B> {
+    ) -> AdxlResult<(), Bus> {
         let watermark_samples_num = watermark_samples_num.min(31);
 
         reg::FIFO_CTL.write_multiple_fields(&mut self.bus, &[
@@ -584,13 +712,17 @@ impl<B: RegisterBus> Adxl345<B> {
     /// Runs `init_defaults` after completion.
     ///
     /// Procedure: Place the ADXL level with the Z axis oriented downwards and run this function to calibrate.
-    pub fn calibrate_axis_offsets(&mut self) -> AdxlResult<(i8, i8, i8), B> {
+    pub fn calibrate_axis_offsets(&mut self) -> AdxlResult<(i8, i8, i8), Bus> {
         // Init
         self.set_measure(false)?;
         self.clear_axis_offsets()?;
         self.set_fifo_ctl(FifoMode::Stream, false, 24)?;
         self.set_rate(Rate::R400)?;
-        self.set_data_format(Res::Full, Justify::Right, Range::R16G)?;
+        reg::DATA_FORMAT.write_multiple_fields(&mut self.bus, &[
+            (reg::FL_DF::FULL_RES, FullRes::MODE_BIT as u32), // full resolution
+            (reg::FL_DF::JUSTIFY, RightJustify::JUSTIFY_BIT as u32), // right justified
+            (reg::FL_DF::RANGE, G16Adxl345::RANGE_BITS as u32), // full range (maps to 0b11, which works on everything)
+        ])?;
 
         // Start measuring
         self.set_measure(true)?;
@@ -622,6 +754,9 @@ impl<B: RegisterBus> Adxl345<B> {
             }
         }
 
+        let bits_per_axis: u8 = 13; // All variants have a maximum of 13 bits per axis, so we can use this value.
+        let lsb_per_g = Model::G_MAX / (1 << (bits_per_axis - 1)) as f32;
+
         // Finding means
         let sum_x: i32 = buf.iter().map(|&(x, ..)| x as i32).sum();
         let sum_y: i32 = buf.iter().map(|&(_, y, _)| y as i32).sum();
@@ -630,16 +765,21 @@ impl<B: RegisterBus> Adxl345<B> {
         let n = buf.len() as i32;
         let m_x = (sum_x + n / 2) / n; // Integer rounding
         let m_y = (sum_y + n / 2) / n;
-        let m_z = (sum_z + n / 2) / n - self.unit as i32; // Removing 1g
+        let m_z = (sum_z + n / 2) as f32 / n as f32 - lsb_per_g; // Removing 1g
 
         let x_off = -(m_x / 4) as i8;
         let y_off = -(m_y / 4) as i8;
-        let z_off = -(m_z / 4) as i8;
+        let z_off = -(m_z / 4.0) as i8;
 
         // Writing offsets
         self.set_axis_offsets(x_off, y_off, z_off)?;
 
         // Restoring Defaults
+        reg::DATA_FORMAT.write_multiple_fields(&mut self.bus, &[
+            (reg::FL_DF::FULL_RES, Res::MODE_BIT as u32),
+            (reg::FL_DF::JUSTIFY, Jus::JUSTIFY_BIT as u32),
+            (reg::FL_DF::RANGE, Range::RANGE_BITS as u32),
+        ])?;
         self.init_defaults()?;
 
         Ok((x_off, y_off, z_off))
@@ -652,7 +792,7 @@ impl<B: RegisterBus> Adxl345<B> {
     /// factor of 15.6 mg/LSB (that is, 0x7F = 2 g). The value stored in
     /// the offset registers is automatically added to the acceleration data
     #[inline]
-    pub fn set_axis_offsets(&mut self, x: i8, y: i8, z: i8) -> AdxlResult<(), B> {
+    pub fn set_axis_offsets(&mut self, x: i8, y: i8, z: i8) -> AdxlResult<(), Bus> {
         reg::OFSX.write(&mut self.bus, x as u32)?;
         reg::OFSY.write(&mut self.bus, y as u32)?;
         reg::OFSZ.write(&mut self.bus, z as u32)?;
@@ -661,7 +801,7 @@ impl<B: RegisterBus> Adxl345<B> {
 
     /// Clear the X Y Z axis offsets
     #[inline]
-    pub fn clear_axis_offsets(&mut self) -> AdxlResult<(), B> {
+    pub fn clear_axis_offsets(&mut self) -> AdxlResult<(), Bus> {
         self.set_axis_offsets(0, 0, 0)?;
         Ok(())
     }
@@ -669,7 +809,7 @@ impl<B: RegisterBus> Adxl345<B> {
     /// Set THRESH_TAP. Unsigned with a scale factor of 62.5 mg/LSB (that is, 0xFF = 16 g)
     /// A value of 0 may result in undesirable behavior if
     /// single tap/double tap interrupts are enabled.
-    pub fn set_thresh_tap(&mut self, val: u8) -> AdxlResult<(), B> {
+    pub fn set_thresh_tap(&mut self, val: u8) -> AdxlResult<(), Bus> {
         reg::THRESH_TAP.write(&mut self.bus, val as u32)?;
         Ok(())
     }
@@ -679,7 +819,7 @@ impl<B: RegisterBus> Adxl345<B> {
     /// above the THRESH_TAP threshold to qualify as a tap event. The scale factor
     /// is 625 µs/LSB. A value of 0 disables the single tap/ double tap
     /// functions.
-    pub fn set_duration(&mut self, val: u8) -> AdxlResult<(), B> {
+    pub fn set_duration(&mut self, val: u8) -> AdxlResult<(), Bus> {
         reg::DUR.write(&mut self.bus, val as u32)?;
         Ok(())
     }
@@ -689,7 +829,7 @@ impl<B: RegisterBus> Adxl345<B> {
     /// start of the time window (defined by the window register) during
     /// which a possible second tap event can be detected. The scale
     /// factor is 1.25 ms/LSB. A value of 0 disables the double tap function.
-    pub fn set_latent(&mut self, val: u8) -> AdxlResult<(), B> {
+    pub fn set_latent(&mut self, val: u8) -> AdxlResult<(), Bus> {
         reg::LATENT.write(&mut self.bus, val as u32)?;
         Ok(())
     }
@@ -700,7 +840,7 @@ impl<B: RegisterBus> Adxl345<B> {
     /// second valid tap can begin. The scale factor is 1.25 ms/LSB. A
     /// value of 0 disables the double tap function.
     /// A value of 0 disables the double tap function.
-    pub fn set_window(&mut self, val: u8) -> AdxlResult<(), B> {
+    pub fn set_window(&mut self, val: u8) -> AdxlResult<(), Bus> {
         reg::WINDOW.write(&mut self.bus, val as u32)?;
         Ok(())
     }
@@ -710,7 +850,7 @@ impl<B: RegisterBus> Adxl345<B> {
     /// Unsigned, so the magnitude of the activity event is compared with the value in the
     /// THRESH_ACT register. The scale factor is 62.5 mg/LSB. A value
     /// of 0 may result in undesirable behavior if the activity interrupt is enabled.
-    pub fn set_thresh_act(&mut self, val: u8) -> AdxlResult<(), B> {
+    pub fn set_thresh_act(&mut self, val: u8) -> AdxlResult<(), Bus> {
         reg::THRESH_ACT.write(&mut self.bus, val as u32)?;
         Ok(())
     }
@@ -720,7 +860,7 @@ impl<B: RegisterBus> Adxl345<B> {
     /// Unsigned, so the magnitude of the activity event is compared with the value in the
     /// THRESH_ACT register. The scale factor is 62.5 mg/LSB. A value
     /// of 0 may result in undesirable behavior if the activity interrupt is enabled.
-    pub fn set_thresh_inact(&mut self, val: u8) -> AdxlResult<(), B> {
+    pub fn set_thresh_inact(&mut self, val: u8) -> AdxlResult<(), Bus> {
         reg::THRESH_INACT.write(&mut self.bus, val as u32)?;
         Ok(())
     }
@@ -733,7 +873,7 @@ impl<B: RegisterBus> Adxl345<B> {
     /// a value less than the time constant of the output data rate.
     /// A value of 0 results in an interrupt when the output data is less than the value
     /// in the THRESH_INACT register.
-    pub fn set_time_inact(&mut self, val: u8) -> AdxlResult<(), B> {
+    pub fn set_time_inact(&mut self, val: u8) -> AdxlResult<(), Bus> {
         reg::TIME_INACT.write(&mut self.bus, val as u32)?;
         Ok(())
     }
@@ -755,7 +895,7 @@ impl<B: RegisterBus> Adxl345<B> {
         inact_x_en: bool,
         inact_y_en: bool,
         inact_z_en: bool,
-    ) -> AdxlResult<(), B> {
+    ) -> AdxlResult<(), Bus> {
         let value = (act_acdc as u8) << 7
             | (act_x_en as u8) << 6
             | (act_y_en as u8) << 5
@@ -775,7 +915,7 @@ impl<B: RegisterBus> Adxl345<B> {
     /// on all axes is compared with the value in THRESH_FF to determine
     /// if a free-fall event occurred. The scale factor is 62.5 mg/LSB.
     /// Values between 300 mg and 600 mg (0x05 to 0x09) are recommended.
-    pub fn set_thresh_ff(&mut self, val: u8) -> AdxlResult<(), B> {
+    pub fn set_thresh_ff(&mut self, val: u8) -> AdxlResult<(), Bus> {
         reg::THRESH_FF.write(&mut self.bus, val as u32)?;
         Ok(())
     }
@@ -784,7 +924,7 @@ impl<B: RegisterBus> Adxl345<B> {
     /// Unsigned time value representing the minimum time that the value of all axes
     /// must be less than THRESH_FF to generate a free-fall interrupt.
     /// The scale factor is 5 ms/LSB. Values between 100 / 350 ms (0x14 to 0x46) are recommended.
-    pub fn set_time_ff(&mut self, val: u8) -> AdxlResult<(), B> {
+    pub fn set_time_ff(&mut self, val: u8) -> AdxlResult<(), Bus> {
         reg::TIME_FF.write(&mut self.bus, val as u32)?;
         Ok(())
     }
@@ -792,7 +932,7 @@ impl<B: RegisterBus> Adxl345<B> {
     /// Set TAP_AXES: Supress
     /// Setting the suppress bit suppresses double tap detection if acceleration greater
     ///  than the value in THRESH_TAP is present between taps.
-    pub fn set_tap_supress(&mut self, on: bool) -> AdxlResult<(), B> {
+    pub fn set_tap_supress(&mut self, on: bool) -> AdxlResult<(), Bus> {
         reg::TAP_AXES.write_field(&mut self.bus, reg::FL_TA::SUPPRESS, on as u32)?;
         Ok(())
     }
@@ -801,7 +941,7 @@ impl<B: RegisterBus> Adxl345<B> {
     /// A setting of 1 in the TAP_X enable, TAP_Y enable, or TAP_Z
     /// enable bit enables x-, y-, or z-axis participation in tap detection.
     /// A setting of 0 excludes the selected axis from participation in tap detection.
-    pub fn set_tap_axes(&mut self, tap_x: bool, tap_y: bool, tap_z: bool) -> AdxlResult<(), B> {
+    pub fn set_tap_axes(&mut self, tap_x: bool, tap_y: bool, tap_z: bool) -> AdxlResult<(), Bus> {
         reg::TAP_AXES.write_multiple_fields(&mut self.bus, &[
             (reg::FL_TA::TAP_X_EN, tap_x as u32),
             (reg::FL_TA::TAP_Y_EN, tap_y as u32),
@@ -815,7 +955,7 @@ impl<B: RegisterBus> Adxl345<B> {
     /// Set INT_ENABLE register
     /// Enables their respective functions to generate interrupts
     /// It is recommended that interrupts be configured before enabling their outputs.
-    pub fn set_int_enable_direct(&mut self, value: u8) -> AdxlResult<(), B> {
+    pub fn set_int_enable_direct(&mut self, value: u8) -> AdxlResult<(), Bus> {
         reg::INT_ENABLE.write(&mut self.bus, value as u32)?;
 
         Ok(())
@@ -834,7 +974,7 @@ impl<B: RegisterBus> Adxl345<B> {
         free_fall: bool,
         watermark: bool,
         overrun: bool,
-    ) -> AdxlResult<(), B> {
+    ) -> AdxlResult<(), Bus> {
         let value = (data_ready as u8) << 7
             | (single_tap as u8) << 6
             | (double_tap as u8) << 5
@@ -854,7 +994,7 @@ impl<B: RegisterBus> Adxl345<B> {
     /// Any bits set to 0 in this register send their respective interrupts to
     /// the INT1 pin, whereas bits set to 1 send their respective interrupts
     /// to the INT2 pin. All selected interrupts for a given pin are OR’ed
-    pub fn set_int_map_direct(&mut self, value: u8) -> AdxlResult<(), B> {
+    pub fn set_int_map_direct(&mut self, value: u8) -> AdxlResult<(), Bus> {
         reg::INT_MAP.write(&mut self.bus, value as u32)?;
 
         Ok(())
@@ -874,7 +1014,7 @@ impl<B: RegisterBus> Adxl345<B> {
         free_fall: bool,
         watermark: bool,
         overrun: bool,
-    ) -> AdxlResult<(), B> {
+    ) -> AdxlResult<(), Bus> {
         let value = (data_ready as u8) << 7
             | (single_tap as u8) << 6
             | (double_tap as u8) << 5
