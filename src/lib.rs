@@ -348,14 +348,14 @@ pub struct AdxlBusSpi<SPI, CS> {
     pub spi_cs: CS,
 }
 
-pub type Adxl312<B: RegisterBus, R: GRange = G12Adxl312, Res: Resolution = FullRes, Jus: Justify = RightJustify> = Adxl3xx<IC312, B, R, Res, Jus>;
-pub type Adxl313<B: RegisterBus, R: GRange = G4Adxl313, Res: Resolution = FullRes, Jus: Justify = RightJustify> = Adxl3xx<IC313, B, R, Res, Jus>;
-pub type Adxl343<B: RegisterBus, R: GRange = G16Adxl345, Res: Resolution = FullRes, Jus: Justify = RightJustify> = Adxl3xx<IC343, B, R, Res, Jus>;
-pub type Adxl344<B: RegisterBus, R: GRange = G16Adxl345, Res: Resolution = FullRes, Jus: Justify = RightJustify> = Adxl3xx<IC344, B, R, Res, Jus>;
-pub type Adxl345<B: RegisterBus, R: GRange = G16Adxl345, Res: Resolution = FullRes, Jus: Justify = RightJustify> = Adxl3xx<IC345, B, R, Res, Jus>;
-pub type Adxl346<B: RegisterBus, R: GRange = G16Adxl345, Res: Resolution = FullRes, Jus: Justify = RightJustify> = Adxl3xx<IC346, B, R, Res, Jus>;
-pub type Adxl375<B: RegisterBus, Jus: Justify = RightJustify> = Adxl3xx<IC375, B, G200Adxl375, FullRes, Jus>;
-pub type Adxl314<B: RegisterBus, Jus: Justify = RightJustify> = Adxl3xx<IC314, B, G12Adxl312, FullRes, Jus>;
+pub type Adxl312<B, R = G12Adxl312, Res = FullRes, Jus = RightJustify> = Adxl3xx<IC312, B, R, Res, Jus>;
+pub type Adxl313<B, R = G4Adxl313, Res = FullRes, Jus = RightJustify> = Adxl3xx<IC313, B, R, Res, Jus>;
+pub type Adxl343<B, R = G16Adxl345, Res = FullRes, Jus = RightJustify> = Adxl3xx<IC343, B, R, Res, Jus>;
+pub type Adxl344<B, R = G16Adxl345, Res = FullRes, Jus = RightJustify> = Adxl3xx<IC344, B, R, Res, Jus>;
+pub type Adxl345<B, R = G16Adxl345, Res = FullRes, Jus = RightJustify> = Adxl3xx<IC345, B, R, Res, Jus>;
+pub type Adxl346<B, R = G16Adxl345, Res = FullRes, Jus = RightJustify> = Adxl3xx<IC346, B, R, Res, Jus>;
+pub type Adxl375<B, Jus = RightJustify> = Adxl3xx<IC375, B, G200Adxl375, FullRes, Jus>;
+pub type Adxl314<B, Jus = RightJustify> = Adxl3xx<IC314, B, G12Adxl312, FullRes, Jus>;
 
 // Marker types for the hardware models
 pub struct IC312;
@@ -421,7 +421,7 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
         } else {
             bits_per_axis = Res::STANDARD_RES_BITS.unwrap_or(10);
         }
-        let lsb_per_g = Range::G_MAX / (1 << (bits_per_axis - 1)) as f32;
+        let lsb_per_g =  (1 << (bits_per_axis - 1)) as f32 / Range::G_MAX;
 
         // Validate Device ID
         let id = reg::DEVID.read(&mut bus)?;
@@ -767,7 +767,7 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
         }
 
         let bits_per_axis: u8 = 13; // All variants have a maximum of 13 bits per axis, so we can use this value.
-        let lsb_per_g = Model::G_MAX / (1 << (bits_per_axis - 1)) as f32;
+        let lsb_per_g =  (1 << (bits_per_axis - 1)) as f32 / Model::G_MAX;
 
         // Finding means
         let sum_x: i32 = buf.iter().map(|&(x, ..)| x as i32).sum();
