@@ -36,7 +36,7 @@
 //! };
 //!
 //! // Adxl Device
-//! let mut adxl = match adxl::Adxl375::new(adxlbus) {
+//! let mut adxl: adxl::Adxl345<_, adxl::G16Adxl345, adxl::FullRes> = match adxl::Adxl345::new(adxlbus) {
 //!     Ok(device) => device,
 //!     Err(e) => {
 //!         println!("Device init error: {:?}", e);
@@ -112,7 +112,7 @@
 //! };
 //!
 //! // Adxl Device
-//! let mut adxl = match adxl::Adxl375::new(adxlbus) {
+//! let mut adxl: adxl::Adxl345<_, adxl::G16Adxl345, adxl::FullRes> = match adxl::Adxl345::new(adxlbus) {
 //!     Ok(device) => device,
 //!     Err(e) => {
 //!         println!("Device init error: {:?}", e);
@@ -399,7 +399,7 @@ pub struct Adxl3xx<Model: AdxlConfig<R, Res>, B: RegisterBus, R: GRange, Res: Re
     bus: B,
     bits_per_axis: u8,
     lsb_per_g: f32,
-    justify: Justify,
+    is_left_justified: bool,
     _marker: PhantomData<(Model, R, Res)>,
 }
 
@@ -419,11 +419,11 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
             return Err(Error::Init);
         }
 
-        let justify = Justify { is_left_justified: false };
+        let justify_val = reg::DATA_FORMAT.read_field(&mut bus, reg::FL_DF::JUSTIFY)?;
+        let is_left_justified = justify_val != 0;
 
         reg::DATA_FORMAT.write_multiple_fields(&mut bus, &[
             (reg::FL_DF::FULL_RES, Res::RESOLUTION_BIT as u32),
-            (reg::FL_DF::JUSTIFY, justify.is_left_justified as u32),
             (reg::FL_DF::RANGE, Range::RANGE_BITS as u32),
         ])?;
 
@@ -431,7 +431,7 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
             bus,
             bits_per_axis,
             lsb_per_g,
-            justify,
+            is_left_justified,
             _marker: PhantomData,
         })
     }
@@ -458,6 +458,15 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
             self.write_reg_addr_raw(reg, &[0x00])?;
         }
 
+        // Restore configured format settings
+        reg::DATA_FORMAT.write_multiple_fields(&mut self.bus, &[
+            (reg::FL_DF::FULL_RES, Res::RESOLUTION_BIT as u32),
+            (reg::FL_DF::RANGE, Range::RANGE_BITS as u32),
+        ])?;
+
+        // Set Right Justify
+        self.set_left_justify(false)?;
+
         // FIFO_CTL
         self.write_reg_addr_raw(0x38, &[0x00])?;
         Ok(())
@@ -480,11 +489,11 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
     }
 
     /// Sets the justification mode of the accelerometer to left-justified or right-justified
-    pub fn set_justify_left(&mut self, left_justify: bool) -> AdxlResult<(), Bus> {
-        self.justify.is_left_justified = left_justify;
+    pub fn set_left_justify(&mut self, left_justify: bool) -> AdxlResult<(), Bus> {
+        self.is_left_justified = left_justify;
         reg::DATA_FORMAT.write_field(&mut self.bus,
                                      reg::FL_DF::JUSTIFY,
-                                     self.justify.is_left_justified as u32
+                                     self.is_left_justified as u32
         )?;
         Ok(())
     }
@@ -550,7 +559,7 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
         let mut z = i16::from_le_bytes([buf[4], buf[5]]);
 
         // Handle left justified data format
-        if self.justify.is_left_justified {
+        if self.is_left_justified {
             let shift: u8 = 16 - self.bits_per_axis;
 
             x >>= shift;
@@ -790,11 +799,6 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
         self.set_axis_offsets(x_off, y_off, z_off)?;
 
         // Restoring Defaults
-        reg::DATA_FORMAT.write_multiple_fields(&mut self.bus, &[
-            (reg::FL_DF::FULL_RES, Res::RESOLUTION_BIT as u32),
-            (reg::FL_DF::JUSTIFY, self.justify.is_left_justified as u32),
-            (reg::FL_DF::RANGE, Range::RANGE_BITS as u32),
-        ])?;
         self.init_defaults()?;
 
         Ok((x_off, y_off, z_off))
