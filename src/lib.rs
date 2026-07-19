@@ -150,38 +150,27 @@ pub const MAX_BUF_LEN: usize = 16;
 
 /// Resolution
 pub trait Resolution {
-    const MODE_BIT: u8;
+    const RESOLUTION_BIT: u8;
     const IS_FULL_RES: bool;
     const STANDARD_RES_BITS: Option<u8>;
 }
 pub struct FullRes;
 impl Resolution for FullRes {
-    const MODE_BIT: u8 = 1;
+    const RESOLUTION_BIT: u8 = 1;
     const IS_FULL_RES: bool = true;
     const STANDARD_RES_BITS: Option<u8> = None;
 }
 
 pub struct TenBitRes;
 impl Resolution for TenBitRes {
-    const MODE_BIT: u8 = 0;
+    const RESOLUTION_BIT: u8 = 0;
     const IS_FULL_RES: bool = false;
     const STANDARD_RES_BITS: Option<u8> = Some(10);
 }
 
 /// Justify
-pub trait Justify {
-    const JUSTIFY_BIT: u8;
-    const IS_LEFT_JUSTIFIED: bool;
-}
-pub struct RightJustify;
-impl Justify for RightJustify {
-    const JUSTIFY_BIT: u8 = 0;
-    const IS_LEFT_JUSTIFIED: bool = false;
-}
-pub struct LeftJustify;
-impl Justify for LeftJustify {
-    const JUSTIFY_BIT: u8 = 1;
-    const IS_LEFT_JUSTIFIED: bool = true;
+pub struct Justify {
+    is_left_justified: bool,
 }
 
 /// Trait to define the compile-time properties of a G-Range
@@ -348,14 +337,14 @@ pub struct AdxlBusSpi<SPI, CS> {
     pub spi_cs: CS,
 }
 
-pub type Adxl312<B, R = G12Adxl312, Res = FullRes, Jus = RightJustify> = Adxl3xx<IC312, B, R, Res, Jus>;
-pub type Adxl313<B, R = G4Adxl313, Res = FullRes, Jus = RightJustify> = Adxl3xx<IC313, B, R, Res, Jus>;
-pub type Adxl343<B, R = G16Adxl345, Res = FullRes, Jus = RightJustify> = Adxl3xx<IC343, B, R, Res, Jus>;
-pub type Adxl344<B, R = G16Adxl345, Res = FullRes, Jus = RightJustify> = Adxl3xx<IC344, B, R, Res, Jus>;
-pub type Adxl345<B, R = G16Adxl345, Res = FullRes, Jus = RightJustify> = Adxl3xx<IC345, B, R, Res, Jus>;
-pub type Adxl346<B, R = G16Adxl345, Res = FullRes, Jus = RightJustify> = Adxl3xx<IC346, B, R, Res, Jus>;
-pub type Adxl375<B, Jus = RightJustify> = Adxl3xx<IC375, B, G200Adxl375, FullRes, Jus>;
-pub type Adxl314<B, Jus = RightJustify> = Adxl3xx<IC314, B, G12Adxl312, FullRes, Jus>;
+pub type Adxl312<B, R = G12Adxl312, Res = FullRes> = Adxl3xx<IC312, B, R, Res>;
+pub type Adxl313<B, R = G4Adxl313, Res = FullRes> = Adxl3xx<IC313, B, R, Res>;
+pub type Adxl343<B, R = G16Adxl345, Res = FullRes> = Adxl3xx<IC343, B, R, Res>;
+pub type Adxl344<B, R = G16Adxl345, Res = FullRes> = Adxl3xx<IC344, B, R, Res>;
+pub type Adxl345<B, R = G16Adxl345, Res = FullRes> = Adxl3xx<IC345, B, R, Res>;
+pub type Adxl346<B, R = G16Adxl345, Res = FullRes> = Adxl3xx<IC346, B, R, Res>;
+pub type Adxl375<B> = Adxl3xx<IC375, B, G200Adxl375, FullRes>;
+pub type Adxl314<B> = Adxl3xx<IC314, B, G12Adxl312, FullRes>;
 
 // Marker types for the hardware models
 pub struct IC312;
@@ -406,14 +395,15 @@ impl<Res: Resolution> AdxlConfig<G16Adxl345, Res> for IC346 {}
 // The ADXL375 ONLY allows G200 and FullRes
 impl AdxlConfig<G200Adxl375, FullRes> for IC375 {}
 
-pub struct Adxl3xx<Model: AdxlConfig<R, Res>, B: RegisterBus, R: GRange, Res: Resolution = FullRes, Jus: Justify = RightJustify> {
+pub struct Adxl3xx<Model: AdxlConfig<R, Res>, B: RegisterBus, R: GRange, Res: Resolution = FullRes> {
     bus: B,
     bits_per_axis: u8,
     lsb_per_g: f32,
-    _marker: PhantomData<(Model, R, Res, Jus)>,
+    justify: Justify,
+    _marker: PhantomData<(Model, R, Res)>,
 }
 
-impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolution, Jus: Justify> Adxl3xx<Model, Bus, Range, Res, Jus> {
+impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolution> Adxl3xx<Model, Bus, Range, Res> {
     pub fn new(mut bus: Bus) -> AdxlResult<Self, Bus> {
         let bits_per_axis: u8;
         if Res::IS_FULL_RES {
@@ -429,9 +419,11 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
             return Err(Error::Init);
         }
 
+        let justify = Justify { is_left_justified: false };
+
         reg::DATA_FORMAT.write_multiple_fields(&mut bus, &[
-            (reg::FL_DF::FULL_RES, Res::MODE_BIT as u32),
-            (reg::FL_DF::JUSTIFY, Jus::JUSTIFY_BIT as u32),
+            (reg::FL_DF::FULL_RES, Res::RESOLUTION_BIT as u32),
+            (reg::FL_DF::JUSTIFY, justify.is_left_justified as u32),
             (reg::FL_DF::RANGE, Range::RANGE_BITS as u32),
         ])?;
 
@@ -439,6 +431,7 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
             bus,
             bits_per_axis,
             lsb_per_g,
+            justify,
             _marker: PhantomData,
         })
     }
@@ -486,8 +479,18 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
         Ok(())
     }
 
+    /// Sets the justification mode of the accelerometer to left-justified or right-justified
+    pub fn set_justify_left(&mut self, left_justify: bool) -> AdxlResult<(), Bus> {
+        self.justify.is_left_justified = left_justify;
+        reg::DATA_FORMAT.write_field(&mut self.bus,
+                                     reg::FL_DF::JUSTIFY,
+                                     self.justify.is_left_justified as u32
+        )?;
+        Ok(())
+    }
+
     /// Change the base configuration of the accelerometer
-    pub fn into_format<NewRes: Resolution, NewJus: Justify, NewRange: GRange>(self) -> AdxlResult<Adxl3xx<Model, Bus, NewRange, NewRes, NewJus>, Bus>
+    pub fn into_format<NewRes: Resolution, NewRange: GRange>(self) -> AdxlResult<Adxl3xx<Model, Bus, NewRange, NewRes>, Bus>
         where Model: AdxlConfig<NewRange, NewRes> {
         Adxl3xx::new(self.bus)
     }
@@ -547,7 +550,7 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
         let mut z = i16::from_le_bytes([buf[4], buf[5]]);
 
         // Handle left justified data format
-        if Jus::IS_LEFT_JUSTIFIED {
+        if self.justify.is_left_justified {
             let shift: u8 = 16 - self.bits_per_axis;
 
             x >>= shift;
@@ -731,8 +734,8 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
         self.set_fifo_ctl(FifoMode::Stream, false, 24)?;
         self.set_rate(Rate::R400)?;
         reg::DATA_FORMAT.write_multiple_fields(&mut self.bus, &[
-            (reg::FL_DF::FULL_RES, FullRes::MODE_BIT as u32), // full resolution
-            (reg::FL_DF::JUSTIFY, RightJustify::JUSTIFY_BIT as u32), // right justified
+            (reg::FL_DF::FULL_RES, FullRes::RESOLUTION_BIT as u32), // full resolution
+            (reg::FL_DF::JUSTIFY, true as u32), // right justified
             (reg::FL_DF::RANGE, G16Adxl345::RANGE_BITS as u32), // full range (maps to 0b11, which works on everything)
         ])?;
 
@@ -788,8 +791,8 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
 
         // Restoring Defaults
         reg::DATA_FORMAT.write_multiple_fields(&mut self.bus, &[
-            (reg::FL_DF::FULL_RES, Res::MODE_BIT as u32),
-            (reg::FL_DF::JUSTIFY, Jus::JUSTIFY_BIT as u32),
+            (reg::FL_DF::FULL_RES, Res::RESOLUTION_BIT as u32),
+            (reg::FL_DF::JUSTIFY, self.justify.is_left_justified as u32),
             (reg::FL_DF::RANGE, Range::RANGE_BITS as u32),
         ])?;
         self.init_defaults()?;
