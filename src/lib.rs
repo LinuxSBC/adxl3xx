@@ -359,13 +359,15 @@ pub type IC314 = IC375; // basically just an automotive-rated clone
 pub trait AdxlModel {
     const ID: u8;
     const G_MAX: f32;
+    const BITS_PER_AXIS_MAX: isize;
+    const CALIBRATION_SCALE: u8;
 }
 
-impl AdxlModel for IC312 { const ID: u8 = 0xE5; const G_MAX: f32 = 12.0; }
-impl AdxlModel for IC313 { const ID: u8 = 0xCB; const G_MAX: f32 = 4.0; }
-impl AdxlModel for IC345 { const ID: u8 = 0xE5; const G_MAX: f32 = 16.0; }
-impl AdxlModel for IC346 { const ID: u8 = 0xE6; const G_MAX: f32 = 16.0; }
-impl AdxlModel for IC375 { const ID: u8 = 0xE5; const G_MAX: f32 = 200.0; }
+impl AdxlModel for IC312 { const ID: u8 = 0xE5; const G_MAX: f32 = 12.0; const BITS_PER_AXIS_MAX: isize = 13; const CALIBRATION_SCALE: u8 = 4; }
+impl AdxlModel for IC313 { const ID: u8 = 0xCB; const G_MAX: f32 = 4.0; const BITS_PER_AXIS_MAX: isize = 13; const CALIBRATION_SCALE: u8 = 4; }
+impl AdxlModel for IC345 { const ID: u8 = 0xE5; const G_MAX: f32 = 16.0; const BITS_PER_AXIS_MAX: isize = 13; const CALIBRATION_SCALE: u8 = 4; }
+impl AdxlModel for IC346 { const ID: u8 = 0xE6; const G_MAX: f32 = 16.0; const BITS_PER_AXIS_MAX: isize = 13; const CALIBRATION_SCALE: u8 = 4; }
+impl AdxlModel for IC375 { const ID: u8 = 0xE5; const G_MAX: f32 = 200.0; const BITS_PER_AXIS_MAX: isize = 13; const CALIBRATION_SCALE: u8 = 32; }
 
 /// If a type implements this, that specific combination is legal.
 pub trait AdxlConfig<R: GRange, Res: Resolution>: AdxlModel {}
@@ -778,8 +780,7 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
             }
         }
 
-        let bits_per_axis: u8 = 13; // All variants have a maximum of 13 bits per axis, so we can use this value.
-        let lsb_per_g =  (1 << (bits_per_axis - 1)) as f32 / Model::G_MAX;
+        let lsb_per_g =  (1 << (Model::BITS_PER_AXIS_MAX - 1)) as f32 / Model::G_MAX;
 
         // Finding means
         let sum_x: i32 = buf.iter().map(|&(x, ..)| x as i32).sum();
@@ -791,9 +792,10 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
         let m_y = (sum_y + n / 2) / n;
         let m_z = (sum_z + n / 2) as f32 / n as f32 - lsb_per_g; // Removing 1g
 
-        let x_off = -(m_x / 4) as i8;
-        let y_off = -(m_y / 4) as i8;
-        let z_off = -(m_z / 4.0) as i8;
+        let scale = Model::CALIBRATION_SCALE as i32;
+        let x_off = -(m_x / scale) as i8;
+        let y_off = -(m_y / scale) as i8;
+        let z_off = -(m_z / (scale as f32)) as i8;
 
         // Writing offsets
         self.set_axis_offsets(x_off, y_off, z_off)?;
