@@ -1,6 +1,6 @@
 [package]
 name        = "adxl3xx"
-version     = "0.1.0"
+version     = "0.1.1"
 edition     = "2024"
 description = "ADXL375/ADXL343/ADXL345/ADXL3xx Accelerometer Driver"
 readme      = "README.md"

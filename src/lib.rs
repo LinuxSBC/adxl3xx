@@ -359,15 +359,15 @@ pub type IC314 = IC375; // basically just an automotive-rated clone
 pub trait AdxlModel {
     const ID: u8;
     const G_MAX: f32;
-    const BITS_PER_AXIS_MAX: isize;
+    const BITS_PER_AXIS_MAX: u8;
     const CALIBRATION_SCALE: u8;
 }
 
-impl AdxlModel for IC312 { const ID: u8 = 0xE5; const G_MAX: f32 = 12.0; const BITS_PER_AXIS_MAX: isize = 13; const CALIBRATION_SCALE: u8 = 4; }
-impl AdxlModel for IC313 { const ID: u8 = 0xCB; const G_MAX: f32 = 4.0; const BITS_PER_AXIS_MAX: isize = 13; const CALIBRATION_SCALE: u8 = 4; }
-impl AdxlModel for IC345 { const ID: u8 = 0xE5; const G_MAX: f32 = 16.0; const BITS_PER_AXIS_MAX: isize = 13; const CALIBRATION_SCALE: u8 = 4; }
-impl AdxlModel for IC346 { const ID: u8 = 0xE6; const G_MAX: f32 = 16.0; const BITS_PER_AXIS_MAX: isize = 13; const CALIBRATION_SCALE: u8 = 4; }
-impl AdxlModel for IC375 { const ID: u8 = 0xE5; const G_MAX: f32 = 200.0; const BITS_PER_AXIS_MAX: isize = 13; const CALIBRATION_SCALE: u8 = 32; }
+impl AdxlModel for IC312 { const ID: u8 = 0xE5; const G_MAX: f32 = 12.0; const BITS_PER_AXIS_MAX: u8 = 13; const CALIBRATION_SCALE: u8 = 4; }
+impl AdxlModel for IC313 { const ID: u8 = 0xCB; const G_MAX: f32 = 4.0; const BITS_PER_AXIS_MAX: u8 = 13; const CALIBRATION_SCALE: u8 = 4; }
+impl AdxlModel for IC345 { const ID: u8 = 0xE5; const G_MAX: f32 = 16.0; const BITS_PER_AXIS_MAX: u8 = 13; const CALIBRATION_SCALE: u8 = 4; }
+impl AdxlModel for IC346 { const ID: u8 = 0xE6; const G_MAX: f32 = 16.0; const BITS_PER_AXIS_MAX: u8 = 13; const CALIBRATION_SCALE: u8 = 4; }
+impl AdxlModel for IC375 { const ID: u8 = 0xE5; const G_MAX: f32 = 200.0; const BITS_PER_AXIS_MAX: u8 = 13; const CALIBRATION_SCALE: u8 = 32; }
 
 /// If a type implements this, that specific combination is legal.
 pub trait AdxlConfig<R: GRange, Res: Resolution>: AdxlModel {}
@@ -413,7 +413,7 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
         } else {
             bits_per_axis = Res::STANDARD_RES_BITS.unwrap_or(10);
         }
-        let lsb_per_g =  (1 << (bits_per_axis - 1)) as f32 / Range::G_MAX;
+        let lsb_per_g =  Self::calculate_lsb_per_g(bits_per_axis, Range::G_MAX);
 
         // Validate Device ID
         let id = reg::DEVID.read(&mut bus)?;
@@ -756,11 +756,6 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
         // Buffer
         let mut buf = [(0_i16, 0_i16, 0_i16); 32];
 
-        // Flushing buffer
-        for i in 0..32 {
-            buf[i] = self.read_axis_lsb_units()?;
-        }
-
         // Waiting for buffer to fill to read the contents
         loop {
             match self.read_fifo_status_entries() {
@@ -780,7 +775,8 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
             }
         }
 
-        let lsb_per_g =  (1 << (Model::BITS_PER_AXIS_MAX - 1)) as f32 / Model::G_MAX;
+        let lsb_per_g = Self::calculate_lsb_per_g(Model::BITS_PER_AXIS_MAX, Model::G_MAX);
+        let scale = Model::CALIBRATION_SCALE as i32;
 
         // Finding means
         let sum_x: i32 = buf.iter().map(|&(x, ..)| x as i32).sum();
@@ -790,12 +786,13 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
         let n = buf.len() as i32;
         let m_x = (sum_x + n / 2) / n; // Integer rounding
         let m_y = (sum_y + n / 2) / n;
-        let m_z = (sum_z + n / 2) as f32 / n as f32 - lsb_per_g; // Removing 1g
+        let m_z = (sum_z + n / 2) / n;
 
-        let scale = Model::CALIBRATION_SCALE as i32;
         let x_off = -(m_x / scale) as i8;
         let y_off = -(m_y / scale) as i8;
-        let z_off = -(m_z / (scale as f32)) as i8;
+        let z_off = -(((m_z as f32) / (scale as f32)) - (lsb_per_g / 4.0)) as i8; // remove 1g
+        // lsb_per_g always needs to be divided by 4 in calibration, even for the ADXL375 which uses scale=32.
+        // I don't know why, but this works.
 
         // Writing offsets
         self.set_axis_offsets(x_off, y_off, z_off)?;
@@ -804,6 +801,11 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
         self.init_defaults()?;
 
         Ok((x_off, y_off, z_off))
+    }
+
+    #[inline]
+    fn calculate_lsb_per_g(total_bits_per_axis: u8, total_g: f32) -> f32 {
+        (1 << (total_bits_per_axis - 1)) as f32 / total_g
     }
 
     /// Set the X Y Z axis offsets
