@@ -61,7 +61,7 @@
 //!     }
 //! }
 //!
-//! // Read Axis in m/s^2
+//! // Read Axis in G
 //! match adxl.read_axis() {
 //!     Ok((x, y, z)) => println!("Axis | X: {x:6.3} | Y: {y:6.3} | Z: {z:6.3} |"),
 //!     Err(e) => println!("Err: {:?}", e),
@@ -141,9 +141,6 @@ use embedded_hal::{i2c, spi};
 // —————————————————————————————————————————————————————————————————————————————————————————————————
 //                                             Globals
 // —————————————————————————————————————————————————————————————————————————————————————————————————
-
-/// Gravity m/s^2
-pub const G: f32 = 9.80665; // Gravity m/s^2
 
 /// Temp write buffer for appending reg addr.
 pub const MAX_BUF_LEN: usize = 16;
@@ -572,28 +569,28 @@ impl<Model: AdxlConfig<Range, Res>, Bus: RegisterBus, Range: GRange, Res: Resolu
         Ok((x, y, z))
     }
 
-    /// Read XYZ Axis as a tuple of f32 values as Acceleration units in m/s^2
+    /// Read XYZ Axis as a tuple of f32 values as Acceleration units in G
     pub fn read_axis(&mut self) -> AdxlResult<(f32, f32, f32), Bus> {
         let data = self.read_axis_lsb_units()?;
 
-        // Convert to m/s²
+        // Convert to G
         Ok(self.convert_lsb_to_accel(data))
     }
 
-    /// Convert from LSB to Acceleration units in m/s^s
+    /// Convert from LSB to Acceleration units in G
     #[inline]
     pub fn convert_lsb_to_accel(&self, data: (i16, i16, i16)) -> (f32, f32, f32) {
-        // Convert to m/s²
+        // Convert to G
         (
-            data.0 as f32 / self.lsb_per_g * G,
-            data.1 as f32 / self.lsb_per_g * G,
-            data.2 as f32 / self.lsb_per_g * G,
+            data.0 as f32 / self.lsb_per_g,
+            data.1 as f32 / self.lsb_per_g,
+            data.2 as f32 / self.lsb_per_g,
         )
     }
 
     /// Read ACT_TAP_STATUS: Asleep
     pub fn is_asleep(&mut self) -> AdxlResult<bool, Bus> {
-        Ok(reg::ACT_TAP_STATUS.read_field(&mut self.bus, reg::FL_ATS::ASLEEP)? as u8 != 0)
+        Ok(reg::ACT_TAP_STATUS.read_field(&mut self.bus, reg::FL_ATS::ASLEEP)? != 0)
     }
 
     /// Read ACT_TAP_STATUS: ACT (X Y Z)
