@@ -66,7 +66,7 @@ match adxl.calibrate_axis_offsets() {
    }
 }
 
-// Read Axis in m/s^2
+// Read Axis in G
 match adxl.read_axis() {
    Ok((x, y, z)) => println!("Axis | X: {x:6.3} | Y: {y:6.3} | Z: {z:6.3} |"),
    Err(e) => println!("Err: {:?}", e),
